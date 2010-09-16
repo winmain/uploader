@@ -1,0 +1,13 @@
+
+syntax: glob
+*.pyc
+build
+dist
+uploader.egg-info
+
+syntax: regexp
+^tt\.py$
+
+syntax: regexp
+^\.settings/org\.eclipse\.core\.resources\.prefs$
+^\.settings/org\.eclipse\.ltk\.core\.refactoring\.prefs$
