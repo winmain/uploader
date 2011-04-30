@@ -7,7 +7,12 @@ setup(name='uploader',
       description='Uploading administration tool',
       author='Denis Denisenko',
       author_email='d.winmain@gmail.com',
-      #url='TODO:',
+      url='https://bitbucket.org/winmain/uploader/',
       packages=['uploader'],
       keywords='upload ssh ftp',
+      entry_points={
+        'console_scripts': [
+            'uploader = uploader.run:main',
+            ],
+        },
       )

@@ -3,7 +3,7 @@
 import sys
 import uploader.clipboard
 
-if __name__ == '__main__':
+def main():
     try:
         if len(sys.argv)<2:
             files = uploader.clipboard.check()      # Сначала проверим буфер обмена
@@ -26,3 +26,7 @@ if __name__ == '__main__':
         atexit.register(raw_input)
         print "Unexpected error:", sys.exc_info()[0]
         raise
+
+
+if __name__ == '__main__':
+    main()
