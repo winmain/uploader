@@ -13,9 +13,9 @@ ftp_upload.py Z:\home\rosrabota\www\404.htm Z:\home\rosrabota\www\off\ip.php
 ftp_upload.py
     Выдает список загруженных файлов и запрос на команду.
 """
-import sys, os, re, imp
+import sys, os, re, imp, tempfile
 
-stackfile = __file__+".temp"
+baseStackPath = tempfile.gettempdir() + '/.uploader.stack'
 localhome_dir = '/srv/'
 servers = {
     'example': {
@@ -59,12 +59,12 @@ def adopt(abspath):
     if host not in servers:
         # Попытаться найти .upload.conf.py файл
         path = abspath
-        while path!='/':        # TODO: Нужна доработка для WIN-версии
+        while path != '/':        # TODO: Нужна доработка для WIN-версии
             path = os.path.dirname(path)
-            if os.path.exists(path+'/.upload.conf.py'):
-                return path.replace('/','|'), abspath[len(path)+1:]
+            if os.path.exists(path + '/.upload.conf.py'):
+                return path.replace('/', '|'), abspath[len(path) + 1:]
 
-        print 'Unknown server: '+host
+        print 'Unknown server: ' + host
         return False
     return host, localpath
 
@@ -79,10 +79,10 @@ def append_file(append):
     # Если попалась директория - включить каждый файл в ней
     if os.path.isdir(abspath):
         for root, dirs, files in os.walk(os.path.abspath(append), topdown=True): #@UnusedVariable
-            if '.svn' in root:
+            if '.svn' in root or '.hg' in root:
                 continue
             for file in files:
-                if not append_file(root+'/'+file):
+                if not append_file(root + '/' + file):
                     return False
         return True
 
@@ -91,17 +91,17 @@ def append_file(append):
     if not append:
         return False
     host, localpath = append
-    local_stackfile = stackfile+'.'+host
+    local_stackfile = baseStackPath + '.' + host
 
     if os.path.exists(local_stackfile):
         f = open(local_stackfile)
         for line in f:
-            if line.rstrip()==localpath:   # Если мы нашли совпадение в файле (значит ранее уже включили этот файл), то просто выйти
+            if line.rstrip() == localpath:   # Если мы нашли совпадение в файле (значит ранее уже включили этот файл), то просто выйти
                 return True
         f.close
 
     f = open(local_stackfile, 'a')
-    f.write(localpath+"\n")
+    f.write(localpath + "\n")
     f.close
     return True
 
@@ -113,7 +113,7 @@ def append_files(files):
     """
     pause = False
     for filename in files:
-        print filename+': ',
+        print filename + ': ',
         if append_file(filename):
             print 'OK'
         else:
@@ -122,94 +122,32 @@ def append_files(files):
         raw_input()
 
 
-def check_clipboard():
-    def check_win_clipboard():
-        """Windows: Проверим-ка мы буфер обмена. Можно копировать файлы и заносить их в список.
-        """
-        import win32clipboard as w #@UnresolvedImport
-        import win32con #@UnresolvedImport
-
-        # Смотрим, что у нас в буфере
-        w.OpenClipboard()
-        try:
-            files = w.GetClipboardData(win32con.CF_HDROP)
-        except:
-            w.CloseClipboard()
-            return False
-        # Очищаем и закрываем буфер
-        w.EmptyClipboard()
-        w.CloseClipboard()
-
-        # Добавляем наши файлы
-        append_files(files)
-        return True
-
-
-    def check_gtk_clipboard():
-        """Linux, gnome: Проверим-ка мы буфер обмена. Можно копировать файлы и заносить их в список.
-        """
-        import pygtk #@UnresolvedImport
-        pygtk.require('2.0')
-        import gtk #@UnresolvedImport
-
-        # get the clipboard
-        clipboard = gtk.clipboard_get()
-
-        # Смотрим, что у нас в буфере
-        contents = clipboard.wait_for_contents('text/uri-list')
-        if contents is None:
-            return False
-
-        # Добавляем наши файлы
-        files = []
-        for file in contents.get_uris():
-            if file.startswith('file://'):
-                files.append(file[7:])
-
-        # Очищаем буфер
-        clipboard.set_text('')
-        clipboard.store()
-
-        if files:
-            append_files(files)
-            return True
-        else:
-            return False
-
-    if os.name=='nt':
-        return check_win_clipboard()
-    elif os.name=='posix':
-        return check_gtk_clipboard()
-    else:
-        raise Exception('Unsupported os "%s"' % os.name)
-
-
 def upload():
     import glob
     """Преаплоад файлов. Реальный аплоад в upload_ftp()"""
 
-    files = glob.glob(stackfile+".*")
+    files = glob.glob(baseStackPath + ".*")
     if not files:
         print 'Download list is empty'
         return False
     # Выводим список файлов для загрузки
     file = files[0]
-    host = re.search(r'\.temp\.(.+)$', file).group(1).replace('|','/')
-    print host+':'
+    host = file[file.index(baseStackPath) + len(baseStackPath) + 1:].replace('|', '/')
+    print host + ':'
     for line in open(file):
         print line,
 
     print
     command = raw_input("Enter: upload, 'c': clear list, ^C: stop > ")
 
-    if command=='c':
+    if command == 'c':
         # Чистим этот список файлов
         os.remove(file)
         return True
 
     # Выбрать сервер
-    if host[0]=='/':
-        local_conf = imp.load_source('local_conf', host+'/.upload.conf.py')
+    if host[0] == '/':
+        local_conf = imp.load_source('local_conf', host + '/.upload.conf.py')
         server = local_conf.conf
         server['basedir'] = host
     else:
@@ -246,11 +184,11 @@ def upload_ftp(stackfile, server, server_name):
     for uploadfile in open(stackfile):
         uploadfile = uploadfile.rstrip()
         remotefile0 = uploadfile.replace('\\', '/');
-        remotefile = remotefile0+'~'
+        remotefile = remotefile0 + '~'
         localdir = 'localdir' in server  and server['localdir'] or localhome_dir
         localwww = 'localdir' in server  and '/' or '/www/'
         print uploadfile,
-        ftp.storbinary('STOR '+remotefile, open(localdir+server_name+localwww+uploadfile, 'rb'))
+        ftp.storbinary('STOR ' + remotefile, open(localdir + server_name + localwww + uploadfile, 'rb'))
         ftp.rename(remotefile, remotefile0)
         print '... OK'
 
@@ -273,7 +211,7 @@ def upload_ssh(stackfile, server, server_name):
     else:
         localdir = 'localdir' in server  and server['localdir'] or localhome_dir
         localwww = 'localdir' in server  and '/' or '/www/'
-        dir = localdir+server_name+localwww    # Локальный каталог проекта
+        dir = localdir + server_name + localwww    # Локальный каталог проекта
 
     files = []
     for uploadfile in open(stackfile):
@@ -288,11 +226,11 @@ def upload_ssh(stackfile, server, server_name):
         tar_params += ['--group ' + server['group']]
 
     # Make commands
-    cmd_tar = 'tar '+ ' '.join(tar_params) +' '+ ' '.join(files)
-    cmd_ssh = 'ssh '+server['user']+'@'+server['host']
-    cmd_untar = 'tar -C "'+server['rootdir']+'" -xzf -'
+    cmd_tar = 'tar ' + ' '.join(tar_params) + ' ' + ' '.join(files)
+    cmd_ssh = 'ssh ' + server['user'] + '@' + server['host']
+    cmd_untar = 'tar -C "' + server['rootdir'] + '" -xzf -'
     # ... and run them
-    os.system(cmd_tar+' | '+cmd_ssh+' '+cmd_untar)
+    os.system(cmd_tar + ' | ' + cmd_ssh + ' ' + cmd_untar)
 
     os.remove(stackfile)
     print '--- finished ---'
@@ -309,13 +247,13 @@ def upload_serialize(stackfile, server, server_name):
     print 'Uploading'
     localdir = 'localdir' in server  and server['localdir'] or localhome_dir
     localwww = 'localdir' in server  and '\\' or '\\www\\'
-    dir = localdir+server_name+localwww    # Локальный каталог проекта
+    dir = localdir + server_name + localwww    # Локальный каталог проекта
 
     files = []
     # Прочитать файлы в files
     for uploadfile in open(stackfile):
         uploadfile = uploadfile.rstrip()
-        files += [(uploadfile, file(dir+uploadfile).read())]
+        files += [(uploadfile, file(dir + uploadfile).read())]
 
     # Составить serialize
     ser = 'a:1:{s:4:"data";a:%d:{' % len(files)
@@ -333,7 +271,7 @@ def upload_serialize(stackfile, server, server_name):
     response = urllib2.urlopen(req)
     the_page = response.read().strip()
 
-    if the_page=='':
+    if the_page == '':
         print '--- Error!!! ---'
         return
 
@@ -355,29 +293,29 @@ def upload_form(stackfile, server, server_name):
     print 'Uploading'
     localdir = 'localdir' in server  and server['localdir'] or localhome_dir
     localwww = 'localdir' in server  and '\\' or '\\www\\'
-    dir = localdir+server_name+localwww    # Локальный каталог проекта
+    dir = localdir + server_name + localwww    # Локальный каталог проекта
 
     import random, string, urllib2
 
-    boundary = ''.join(random.sample(string.letters+string.digits, 30))
+    boundary = ''.join(random.sample(string.letters + string.digits, 30))
     data = ''
     # Прочитать файлы и составить из них data
     for uploadfile in open(stackfile):
         uploadfile = uploadfile.rstrip()
-        data += '--'+ boundary +'\n'+\
-            'Content-Disposition: form-data; name="files[]"; filename="'+ uploadfile.replace('\\', '|') +'"\n' +\
-            'Content-Transfer-Encoding: binary\n' +\
-            '\n' +\
-            file(dir+uploadfile, 'rb').read() +'\n'
-    data += '--'+ boundary +'--\n'
+        data += '--' + boundary + '\n' + \
+            'Content-Disposition: form-data; name="files[]"; filename="' + uploadfile.replace('\\', '|') + '"\n' + \
+            'Content-Transfer-Encoding: binary\n' + \
+            '\n' + \
+            file(dir + uploadfile, 'rb').read() + '\n'
+    data += '--' + boundary + '--\n'
 
     # Запрос на сервер
     req = urllib2.Request(url=server['url'],
                           data=data,
-                          headers={'Content-type': 'multipart/form-data, boundary='+boundary})
+                          headers={'Content-type': 'multipart/form-data, boundary=' + boundary})
 
     result = urllib2.urlopen(req).read()
-    if result=='':
+    if result == '':
         print '--- Error!!! ---'
         return
 
@@ -386,3 +324,4 @@ def upload_form(stackfile, server, server_name):
 
     os.remove(stackfile)
     print '--- finished ---'
+

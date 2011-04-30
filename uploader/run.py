@@ -1,16 +1,20 @@
 #!/usr/bin/python
 # coding: utf-8
 import sys
-import uploader
+import uploader.clipboard
 
 if __name__ == '__main__':
     try:
         if len(sys.argv)<2:
-            if not uploader.check_clipboard():      # Сначала проверим буфер обмена
-                if not uploader.upload():           # Потом проверим, не пуст ли список загрузок
-                    raw_input()                     # Если он пуст, то тупо ничего не делаем :)
+            files = uploader.clipboard.check()      # Сначала проверим буфер обмена
         else:
-            uploader.append_files(sys.argv[1:])     # Добавляем все файлы из коммандной строки
+            files = sys.argv[1:]                    # Добавляем все файлы из коммандной строки
+
+        if files:
+            uploader.append_files(files)
+        else:
+            if not uploader.upload():           # Потом проверим, не пуст ли список загрузок
+                raw_input()                     # Если он пуст, то тупо ничего не делаем :)
 
     except KeyboardInterrupt:
         # User pressed CTRL+C, do nothing
