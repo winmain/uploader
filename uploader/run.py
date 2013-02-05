@@ -8,12 +8,12 @@ def main():
         if len(sys.argv)<2:
             files = uploader.clipboard.check()      # Сначала проверим буфер обмена
         else:
-            files = sys.argv[1:]                    # Добавляем все файлы из коммандной строки
+            files = sys.argv[1:]                    # Добавляем все файлы из командной строки
 
         if files:
             uploader.append_files(files)
         else:
-            if not uploader.upload():           # Потом проверим, не пуст ли список загрузок
+            if not uploader.receive_command():           # Потом проверим, не пуст ли список загрузок
                 raw_input()                     # Если он пуст, то тупо ничего не делаем :)
 
     except KeyboardInterrupt:

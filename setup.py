@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='uploader',
-      version='0.1',
+      version='0.2',
       description='Uploading administration tool',
       author='Denis Denisenko',
       author_email='d.winmain@gmail.com',

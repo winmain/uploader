@@ -13,7 +13,7 @@ ftp_upload.py Z:\home\rosrabota\www\404.htm Z:\home\rosrabota\www\off\ip.php
 ftp_upload.py
     Выдает список загруженных файлов и запрос на команду.
 """
-import sys, os, re, imp, tempfile
+import sys, os, re, imp, tempfile, time
 
 baseStackPath = tempfile.gettempdir() + '/.uploader.stack'
 localhome_dir = '/srv/'
@@ -122,9 +122,9 @@ def append_files(files):
         raw_input()
 
 
-def upload():
+def receive_command():
     import glob
-    """Преаплоад файлов. Реальный аплоад в upload_ftp()"""
+    """Ожидание и разбор команды от юзера."""
 
     files = glob.glob(baseStackPath + ".*")
     if not files:
@@ -138,7 +138,7 @@ def upload():
         print line,
 
     print
-    command = raw_input("Enter: upload, 'c': clear list, ^C: stop > ")
+    command = raw_input("Enter: upload, 'c': clear list, 'w': watch for changes, ^C: stop > ")
 
     if command == 'c':
         # Чистим этот список файлов
@@ -152,6 +152,11 @@ def upload():
         server['basedir'] = host
     else:
         server = servers[host]
+
+    if command == 'w':
+        # Мониторим файлы и заливаем их на сервер по мере изменения
+        watch_command(file, server, host)
+        return True
 
     # Загружаем файлы на сервак
     if server['protocol'] == 'ssh':
@@ -325,3 +330,47 @@ def upload_form(stackfile, server, server_name):
     os.remove(stackfile)
     print '--- finished ---'
 
+
+def watch_command(stackfile, server, server_name):
+    """Наблюдаем за изменениями файлов из stackfile и заливаем их при изменении.
+    Выход из этого режима - ctrl+c
+
+    stackfile --    Полное имя файла стека
+    server --       Элемент из массива servers
+    server_name --  Название сервера
+
+    """
+    from os.path import join, getmtime
+
+    if server['protocol'] != 'ssh':
+        raise Exception("server protocol must be ssh")
+
+    if 'basedir' in server:
+        local_dir = server['basedir']
+    else:
+        raise Exception("server must have 'basedir'")
+
+    files = []
+    for upload_file in open(stackfile):
+        upload_file = upload_file.rstrip()
+        local_file = join(local_dir, upload_file)
+        files.append((local_file, server['rootdir'] + upload_file, getmtime(local_file)))
+
+    print 'Watching for changes'
+
+    while True:
+        uploaded = False
+        for idx, (local_file, remote_file, mtime) in enumerate(files):
+            new_mtime = getmtime(local_file)
+            if new_mtime != mtime:
+                print local_file
+                # Make commands
+                cmd_ssh = ('scp ' + local_file + ' ' +
+                           server['user'] + '@' + server['host'] + ':' + remote_file)
+                os.system(cmd_ssh)
+
+                files[idx] = (local_file, remote_file, new_mtime)
+                uploaded = True
+
+        if not uploaded:
+            time.sleep(1)
