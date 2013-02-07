@@ -342,6 +342,11 @@ def watch_command(stackfile, server, server_name):
     """
     from os.path import join, getmtime
 
+    def upload(local_file, remote_file):
+        cmd_ssh = ('scp ' + local_file + ' ' +
+                   server['user'] + '@' + server['host'] + ':' + remote_file)
+        os.system(cmd_ssh)
+
     if server['protocol'] != 'ssh':
         raise Exception("server protocol must be ssh")
 
@@ -354,7 +359,9 @@ def watch_command(stackfile, server, server_name):
     for upload_file in open(stackfile):
         upload_file = upload_file.rstrip()
         local_file = join(local_dir, upload_file)
-        files.append((local_file, server['rootdir'] + upload_file, getmtime(local_file)))
+        remote_file = server['rootdir'] + upload_file
+        files.append((local_file, remote_file, getmtime(local_file)))
+        upload(local_file, remote_file)
 
     print 'Watching for changes'
 
@@ -365,9 +372,7 @@ def watch_command(stackfile, server, server_name):
             if new_mtime != mtime:
                 print local_file
                 # Make commands
-                cmd_ssh = ('scp ' + local_file + ' ' +
-                           server['user'] + '@' + server['host'] + ':' + remote_file)
-                os.system(cmd_ssh)
+                upload(local_file, remote_file)
 
                 files[idx] = (local_file, remote_file, new_mtime)
                 uploaded = True
