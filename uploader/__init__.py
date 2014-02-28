@@ -155,12 +155,12 @@ def receive_command():
 
     if command == 'w':
         # Мониторим файлы и заливаем их на сервер по мере изменения
-        watch_command(file, server, host)
+        watch_command(file, server)
         return True
 
     # Загружаем файлы на сервак
     if server['protocol'] == 'ssh':
-        upload_ssh(file, server, host)
+        upwrapper(server, lambda s: upload_ssh(file, s))
     elif server['protocol'] == 'serialize':
         upload_serialize(file, server, host)
     elif server['protocol'] == 'form':
@@ -172,8 +172,33 @@ def receive_command():
     return True
 
 
+def upwrapper(conf, uploadFn):
+    """Обёртка, вызывающая праллельную загрузку файлов на несколько серверов
+
+    conf --     Полная конфигурация
+    uploadFn -- Функция загрузки, принимающая на вход параметр server
+    """
+    if 'servers' in conf:
+        import threading
+        threads = []
+        for srvConf in conf['servers']:
+            server = conf.copy()
+            for key, value in srvConf.iteritems():
+                if value is None:
+                    del server[key]
+                else:
+                    server[key] = value
+            thread = threading.Thread(target=uploadFn, args=(server,))
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
+        print '--- all uploads finished ---'
+    else:
+        uploadFn(conf)
+
+
 def upload_ftp(stackfile, server, server_name):
-    from ftplib import FTP
     """Поехали аплоадить файлы на сервак по FTP
 
     stackfile --    Полное имя файла стека
@@ -181,6 +206,7 @@ def upload_ftp(stackfile, server, server_name):
     server_name --  Название сервера
 
     """
+    from ftplib import FTP
     print 'Connecting'
     ftp = FTP(server['host'], server['user'], server['passwd'])
     ftp.cwd(server['rootdir'])
@@ -188,7 +214,7 @@ def upload_ftp(stackfile, server, server_name):
     print 'Uploading'
     for uploadfile in open(stackfile):
         uploadfile = uploadfile.rstrip()
-        remotefile0 = uploadfile.replace('\\', '/');
+        remotefile0 = uploadfile.replace('\\', '/')
         remotefile = remotefile0 + '~'
         localdir = 'localdir' in server  and server['localdir'] or localhome_dir
         localwww = 'localdir' in server  and '/' or '/www/'
@@ -202,21 +228,15 @@ def upload_ftp(stackfile, server, server_name):
     print '--- finished ---'
 
 
-def upload_ssh(stackfile, server, server_name):
+def upload_ssh(stackfile, server):
     """Поехали аплоадить файлы на сервак по SSH
 
     stackfile --    Полное имя файла стека
     server --       Элемент из массива servers
-    server_name --  Название сервера
 
     """
-    print 'Uploading'
-    if 'basedir' in server:
-        dir = server['basedir']
-    else:
-        localdir = 'localdir' in server  and server['localdir'] or localhome_dir
-        localwww = 'localdir' in server  and '/' or '/www/'
-        dir = localdir + server_name + localwww    # Локальный каталог проекта
+    print 'Uploading as ' + server['user'] + '@' + server['host']
+    dir = server['basedir']
 
     files = []
     for uploadfile in open(stackfile):
@@ -238,7 +258,7 @@ def upload_ssh(stackfile, server, server_name):
     os.system(cmd_tar + ' | ' + cmd_ssh + ' ' + cmd_untar)
 
     os.remove(stackfile)
-    print '--- finished ---'
+    print '--- finished ' + server['user'] + '@' + server['host'] + ' ---'
 
 
 def upload_serialize(stackfile, server, server_name):
@@ -331,7 +351,7 @@ def upload_form(stackfile, server, server_name):
     print '--- finished ---'
 
 
-def watch_command(stackfile, server, server_name):
+def watch_command(stackfile, server):
     """Наблюдаем за изменениями файлов из stackfile и заливаем их при изменении.
     Выход из этого режима - ctrl+c
 
