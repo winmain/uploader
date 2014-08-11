@@ -44,7 +44,7 @@ def adopt(abspath):
     Если разбиение не получилось (сервер неизвестен), то возвращаем false
     """
 
-    if not os.path.isfile(abspath):
+    if not os.path.isfile(abspath) and not os.path.islink(abspath):
         print "It's not a file"
         return False
 
@@ -161,12 +161,16 @@ def receive_command():
     # Загружаем файлы на сервак
     if server['protocol'] == 'ssh':
         upwrapper(server, lambda s: upload_ssh(file, s))
+        os.remove(file)
     elif server['protocol'] == 'serialize':
         upload_serialize(file, server, host)
+        os.remove(file)
     elif server['protocol'] == 'form':
         upload_form(file, server, host)
+        os.remove(file)
     elif server['protocol'] == 'ftp':
         upload_ftp(file, server, host)
+        os.remove(file)
     else:
         raise Exception('Unknown upload protocol "%s"' % server['protocol'])
     return True
@@ -224,7 +228,6 @@ def upload_ftp(stackfile, server, server_name):
         print '... OK'
 
     ftp.quit()
-    os.remove(stackfile)
     print '--- finished ---'
 
 
@@ -257,7 +260,6 @@ def upload_ssh(stackfile, server):
     # ... and run them
     os.system(cmd_tar + ' | ' + cmd_ssh + ' ' + cmd_untar)
 
-    os.remove(stackfile)
     print '--- finished ' + server['user'] + '@' + server['host'] + ' ---'
 
 
@@ -303,7 +305,6 @@ def upload_serialize(stackfile, server, server_name):
     print the_page
     raw_input()
 
-    os.remove(stackfile)
     print '--- finished ---'
 
 
@@ -347,7 +348,6 @@ def upload_form(stackfile, server, server_name):
     print result
     raw_input()
 
-    os.remove(stackfile)
     print '--- finished ---'
 
 
