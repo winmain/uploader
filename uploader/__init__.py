@@ -255,7 +255,10 @@ def upload_ssh(stackfile, server):
 
     # Make commands
     cmd_tar = 'tar ' + ' '.join(tar_params) + ' ' + ' '.join(files)
-    cmd_ssh = 'ssh ' + server['user'] + '@' + server['host']
+    cmd_ssh_args = ''
+    if server['ssh_args']:
+        cmd_ssh_args = server['ssh_args'] + ' '
+    cmd_ssh = 'ssh ' + cmd_ssh_args + server['user'] + '@' + server['host']
     cmd_untar = 'tar -C "' + server['rootdir'] + '" -xzf -'
     # ... and run them
     os.system(cmd_tar + ' | ' + cmd_ssh + ' ' + cmd_untar)
