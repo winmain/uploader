@@ -13,7 +13,11 @@ ftp_upload.py Z:\home\rosrabota\www\404.htm Z:\home\rosrabota\www\off\ip.php
 ftp_upload.py
     Выдает список загруженных файлов и запрос на команду.
 """
-import sys, os, re, imp, tempfile, time
+import os
+import re
+import imp
+import tempfile
+import time
 
 baseStackPath = tempfile.gettempdir() + '/.uploader.stack'
 localhome_dir = '/srv/'
@@ -255,9 +259,7 @@ def upload_ssh(stackfile, server):
 
     # Make commands
     cmd_tar = 'tar ' + ' '.join(tar_params) + ' ' + ' '.join(files)
-    cmd_ssh_args = ''
-    if server['ssh_args']:
-        cmd_ssh_args = server['ssh_args'] + ' '
+    cmd_ssh_args = (server['ssh_args'] + ' ') if 'ssh_args' in server else ''
     cmd_ssh = 'ssh ' + cmd_ssh_args + server['user'] + '@' + server['host']
     cmd_untar = 'tar -C "' + server['rootdir'] + '" -xzf -'
     # ... and run them
