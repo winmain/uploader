@@ -14,99 +14,66 @@ ftp_upload.py
     Выдает список загруженных файлов и запрос на команду.
 """
 import os
-import re
-import imp
 import tempfile
 import time
 
-baseStackPath = tempfile.gettempdir() + '/.uploader.stack'
-localhome_dir = '/srv/'
-servers = {
-    'example': {
-        'host':     '127.0.0.1',
-        'user':     'login',
-        'passwd':   'password',
-        'rootdir':  '/www/htdocs/',
-    },
-}
+from stack import Stack
+from conf import Conf, ConfError, Server
 
-# Добавим дополнительные серверы
-if os.path.exists(ur'C:\home\.docs\Логин\hosts\ftp_upload-hosts.py'):
-    more_servers = imp.load_source('more_servers', ur'C:\home\.docs\Логин\hosts\ftp_upload-hosts.py'.encode('cp1251'))
-    servers.update(more_servers.servers)
-if os.path.exists(os.path.expanduser('~/ftp_upload-hosts.py')):
-    more_servers = imp.load_source('more_servers', os.path.expanduser('~/ftp_upload-hosts.py'))
-    servers.update(more_servers.servers)
+stackPath = tempfile.gettempdir() + '/.uploader.stack'
 
 
 def info(v):
-    print '%s.%r' % (type(v), v)
+    print('%s.%r' % (type(v), v))
 
 
-def adopt(abspath):
+def split_conf_path(abspath):
     """Разбиваем полный путь к файлу на сервер и относительный путь.
     Если разбиение не получилось (сервер неизвестен), то возвращаем false
     """
+    # Попытаться найти .upload.conf.py файл
+    path = abspath
+    while path != '/':        # TODO: Нужна доработка для WIN-версии
+        path = os.path.dirname(path)
+        if os.path.exists(path + '/.upload.conf.py'):
+            return path, abspath[len(path) + 1:]
 
-    if not os.path.isfile(abspath) and not os.path.islink(abspath):
-        print "It's not a file"
-        return False
-
-    result = \
-        re.search(r'/home/([^/]*)/(.+)$', abspath) \
-        or re.search(r'[\\/]KrasPrice[\\/]([^\\/]*)[\\/](.+)$', abspath)
-    if not result:
-        print 'You are not in home dir'
-        return False
-    host = result.group(1)
-    localpath = result.group(2)
-    if host not in servers:
-        # Попытаться найти .upload.conf.py файл
-        path = abspath
-        while path != '/':        # TODO: Нужна доработка для WIN-версии
-            path = os.path.dirname(path)
-            if os.path.exists(path + '/.upload.conf.py'):
-                return path.replace('/', '|'), abspath[len(path) + 1:]
-
-        print 'Unknown server: ' + host
-        return False
-    return host, localpath
+    print('Config file .upload.conf.py not found in this directory or parent tree')
+    return False
 
 
-def append_file(append):
+def append_file(stack, confs, abspath):
     """Просто добавляем файл в конец списка
 
-    TODO: организовать проверку на старость стек-файла (более 1 дня)
+    @param stack    Структура стека с подготовленными для загрузки файлами
+    @param confs    Dict конфигураций, создаётся динамически. Нужен, чтобы получить ignore файлов.
+    @param abspath  Абсолютный путь добавляемого файла
     """
+    assert isinstance(stack, Stack)
 
-    abspath = os.path.abspath(append)
+    conf_and_path = split_conf_path(abspath)
+    if not conf_and_path:
+        return False
+    conf_path, sub_path = conf_and_path
+
+    if conf_path not in confs:
+        confs[conf_path] = Conf(conf_path)
+    conf = confs[conf_path]
+
     # Если попалась директория - включить каждый файл в ней
     if os.path.isdir(abspath):
-        for root, dirs, files in os.walk(os.path.abspath(append), topdown=True): #@UnusedVariable
-            if '.svn' in root or '.hg' in root:
+        for root, dirs, files in os.walk(abspath, topdown=True):  # @UnusedVariable
+            if conf.is_ignore(root):
                 continue
             for file in files:
-                if not append_file(root + '/' + file):
+                if conf.is_ignore(file):
+                    continue
+                if not append_file(stack, confs, os.path.abspath(root + '/' + file)):
                     return False
         return True
 
     # Обрабатываем обычный файл
-    append = adopt(os.path.abspath(append))
-    if not append:
-        return False
-    host, localpath = append
-    local_stackfile = baseStackPath + '.' + host
-
-    if os.path.exists(local_stackfile):
-        f = open(local_stackfile)
-        for line in f:
-            if line.rstrip() == localpath:   # Если мы нашли совпадение в файле (значит ранее уже включили этот файл), то просто выйти
-                return True
-        f.close
-
-    f = open(local_stackfile, 'a')
-    f.write(localpath + "\n")
-    f.close
+    stack.append(conf_path, [sub_path])
     return True
 
 
@@ -115,291 +82,171 @@ def append_files(files):
 
     Это обертка для append_file()
     """
+    assert isinstance(files, list)
+    stack = Stack(stackPath)
+    confs = {}
     pause = False
     for filename in files:
-        print filename + ': ',
-        if append_file(filename):
-            print 'OK'
+        print(filename + ': ',)
+        if append_file(stack, confs, os.path.abspath(filename)):
+            print('OK')
         else:
             pause = True
+    stack.save()
     if pause:
         raw_input()
 
 
 def receive_command():
-    import glob
     """Ожидание и разбор команды от юзера."""
 
-    files = glob.glob(baseStackPath + ".*")
-    if not files:
-        print 'Download list is empty'
+    stack = Stack(stackPath)
+    if not stack:
+        print('Download stack is empty')
         return False
     # Выводим список файлов для загрузки
-    file = files[0]
-    host = file[file.index(baseStackPath) + len(baseStackPath) + 1:].replace('|', '/')
-    print host + ':'
-    for line in open(file):
-        print line,
+    stack.print_data()
 
-    print
     command = raw_input("Enter: upload, 'c': clear list, 'w': watch for changes, ^C: stop > ")
 
     if command == 'c':
         # Чистим этот список файлов
-        os.remove(file)
+        stack.clear_and_save()
         return True
 
-    # Выбрать сервер
-    if host[0] == '/':
-        local_conf = imp.load_source('local_conf', host + '/.upload.conf.py')
-        server = local_conf.conf
-        server['basedir'] = host
-    else:
-        server = servers[host]
+    # Load configs
+    confs = stack.load_confs()
 
     if command == 'w':
         # Мониторим файлы и заливаем их на сервер по мере изменения
-        watch_command(file, server)
+        watch_command(stack, confs)
         return True
 
-    # Загружаем файлы на сервак
-    if server['protocol'] == 'ssh':
-        upwrapper(server, lambda s: upload_ssh(file, s))
-        os.remove(file)
-    elif server['protocol'] == 'serialize':
-        upload_serialize(file, server, host)
-        os.remove(file)
-    elif server['protocol'] == 'form':
-        upload_form(file, server, host)
-        os.remove(file)
-    elif server['protocol'] == 'ftp':
-        upload_ftp(file, server, host)
-        os.remove(file)
-    else:
-        raise Exception('Unknown upload protocol "%s"' % server['protocol'])
+    # Upload files to server/servers in parallel threads
+    import threading
+    threads = []
+    for conf_path, sub_paths in stack.data.iteritems():
+        conf = confs[conf_path]
+        assert isinstance(conf, Conf)
+        for server in conf.servers:
+            assert isinstance(server, Server)
+            if conf.protocol == 'ssh':
+                thread = threading.Thread(target=upload_ssh, args=(conf, server, sub_paths))
+            elif conf.protocol == 'ftp':
+                thread = threading.Thread(target=upload_ftp, args=(conf, server, sub_paths))
+            else:
+                raise Exception("Cannot process protocol: " + conf.protocol)
+            thread.start()
+            threads.append(thread)
+
+    for thread in threads:
+        thread.join()
+    if len(threads) > 1:
+        print('--- all uploads finished ---')
+    stack.clear_and_save()
     return True
 
 
-def upwrapper(conf, uploadFn):
-    """Обёртка, вызывающая праллельную загрузку файлов на несколько серверов
+def upload_ssh(conf, server, sub_paths):
+    """Поехали аплоадить файлы на сервак по SSH
 
-    conf --     Полная конфигурация
-    uploadFn -- Функция загрузки, принимающая на вход параметр server
+    @param conf         Конфигурация аплоада
+    @param server       Сервер аплоада
+    @param sub_paths    Список файлов для аплоада относительно пути conf.path
     """
-    if 'servers' in conf:
-        import threading
-        threads = []
-        for srvConf in conf['servers']:
-            server = conf.copy()
-            for key, value in srvConf.iteritems():
-                if value is None:
-                    del server[key]
-                else:
-                    server[key] = value
-            thread = threading.Thread(target=uploadFn, args=(server,))
-            thread.start()
-            threads.append(thread)
-        for thread in threads:
-            thread.join()
-        print '--- all uploads finished ---'
-    else:
-        uploadFn(conf)
+    assert isinstance(conf, Conf)
+    assert isinstance(server, Server)
+    print('Uploading as ' + server.user_host)
+
+    # Параметры tar
+    tar_params = ['-C "%s"' % conf.path,
+                  '-czf -']
+    if server.owner:
+        tar_params += ['--owner ' + server.owner]
+    if server.group:
+        tar_params += ['--group ' + server.group]
+
+    # Make commands
+    cmd_tar = 'tar ' + ' '.join(tar_params) + ' ' + ' '.join(sub_paths)
+    cmd_ssh_args = (server.ssh_args + ' ') if server.ssh_args else ''
+    cmd_ssh = 'ssh ' + cmd_ssh_args + server.user_host
+    cmd_untar = 'tar -C "' + server.rootdir + '" -xzf -'
+    # ... and run them
+    os.system(cmd_tar + ' | ' + cmd_ssh + ' ' + cmd_untar)
+
+    print '--- finished ' + server.user_host + ' ---'
 
 
-def upload_ftp(stackfile, server, server_name):
+def upload_ftp(conf, server, sub_paths):
     """Поехали аплоадить файлы на сервак по FTP
 
-    stackfile --    Полное имя файла стека
-    server --       Элемент из массива servers
-    server_name --  Название сервера
-
+    @param conf         Конфигурация аплоада
+    @param server       Сервер аплоада
+    @param sub_paths    Список файлов для аплоада относительно пути conf.path
     """
+    assert isinstance(conf, Conf)
+    assert isinstance(server, Server)
     from ftplib import FTP
-    print 'Connecting'
-    ftp = FTP(server['host'], server['user'], server['passwd'])
-    ftp.cwd(server['rootdir'])
+    print('Connecting')
+    ftp = FTP(server.host, server.user, server.srv['passwd'])
+    ftp.cwd(server.rootdir)
 
     print 'Uploading'
-    for uploadfile in open(stackfile):
-        uploadfile = uploadfile.rstrip()
-        remotefile0 = uploadfile.replace('\\', '/')
-        remotefile = remotefile0 + '~'
-        localdir = 'localdir' in server  and server['localdir'] or localhome_dir
-        localwww = 'localdir' in server  and '/' or '/www/'
-        print uploadfile,
-        ftp.storbinary('STOR ' + remotefile, open(localdir + server_name + localwww + uploadfile, 'rb'))
-        ftp.rename(remotefile, remotefile0)
+    for sub_path in sub_paths:
+        sub_path_tmp = sub_path + '~'
+        print sub_path,
+        ftp.storbinary('STOR ' + sub_path_tmp, open(conf.local_path(sub_path), 'rb'))
+        ftp.rename(sub_path_tmp, sub_path)
         print '... OK'
 
     ftp.quit()
     print '--- finished ---'
 
 
-def upload_ssh(stackfile, server):
-    """Поехали аплоадить файлы на сервак по SSH
-
-    stackfile --    Полное имя файла стека
-    server --       Элемент из массива servers
-
-    """
-    print 'Uploading as ' + server['user'] + '@' + server['host']
-    dir = server['basedir']
-
-    files = []
-    for uploadfile in open(stackfile):
-        files.append(uploadfile.rstrip())
-
-    # Параметры tar
-    tar_params = ['-C "%s"' % dir,
-                  '-czf -']
-    if 'owner' in server:
-        tar_params += ['--owner ' + server['owner']]
-    if 'group' in server:
-        tar_params += ['--group ' + server['group']]
-
-    # Make commands
-    cmd_tar = 'tar ' + ' '.join(tar_params) + ' ' + ' '.join(files)
-    cmd_ssh_args = (server['ssh_args'] + ' ') if 'ssh_args' in server else ''
-    cmd_ssh = 'ssh ' + cmd_ssh_args + server['user'] + '@' + server['host']
-    cmd_untar = 'tar -C "' + server['rootdir'] + '" -xzf -'
-    # ... and run them
-    os.system(cmd_tar + ' | ' + cmd_ssh + ' ' + cmd_untar)
-
-    print '--- finished ' + server['user'] + '@' + server['host'] + ' ---'
-
-
-def upload_serialize(stackfile, server, server_name):
-    """Поехали аплоадить файлы на сервак аналогично php serialize()
-
-    stackfile --    Полное имя файла стека
-    server --       Элемент из массива servers
-    server_name --  Название сервера
-
-    """
-    print 'Uploading'
-    localdir = 'localdir' in server  and server['localdir'] or localhome_dir
-    localwww = 'localdir' in server  and '\\' or '\\www\\'
-    dir = localdir + server_name + localwww    # Локальный каталог проекта
-
-    files = []
-    # Прочитать файлы в files
-    for uploadfile in open(stackfile):
-        uploadfile = uploadfile.rstrip()
-        files += [(uploadfile, file(dir + uploadfile).read())]
-
-    # Составить serialize
-    ser = 'a:1:{s:4:"data";a:%d:{' % len(files)
-    for filename, filedata in files:
-        ser += 's:%d:"%s";s:%d:"%s";' % (len(filename), filename, len(filedata), filedata)
-    ser += '}}'
-
-    # Запрос на сервер
-    import urllib, urllib2
-
-    values = {'ser':ser}
-    data = urllib.urlencode(values)
-
-    req = urllib2.Request(server['url'], data)
-    response = urllib2.urlopen(req)
-    the_page = response.read().strip()
-
-    if the_page == '':
-        print '--- Error!!! ---'
-        return
-
-    print the_page
-    raw_input()
-
-    print '--- finished ---'
-
-
-def upload_form(stackfile, server, server_name):
-    """Поехали аплоадить файлы на сервак как form upload
-
-    stackfile --    Полное имя файла стека
-    server --       Элемент из массива servers
-    server_name --  Название сервера
-
-    """
-    print 'Uploading'
-    localdir = 'localdir' in server  and server['localdir'] or localhome_dir
-    localwww = 'localdir' in server  and '\\' or '\\www\\'
-    dir = localdir + server_name + localwww    # Локальный каталог проекта
-
-    import random, string, urllib2
-
-    boundary = ''.join(random.sample(string.letters + string.digits, 30))
-    data = ''
-    # Прочитать файлы и составить из них data
-    for uploadfile in open(stackfile):
-        uploadfile = uploadfile.rstrip()
-        data += '--' + boundary + '\n' + \
-            'Content-Disposition: form-data; name="files[]"; filename="' + uploadfile.replace('\\', '|') + '"\n' + \
-            'Content-Transfer-Encoding: binary\n' + \
-            '\n' + \
-            file(dir + uploadfile, 'rb').read() + '\n'
-    data += '--' + boundary + '--\n'
-
-    # Запрос на сервер
-    req = urllib2.Request(url=server['url'],
-                          data=data,
-                          headers={'Content-type': 'multipart/form-data, boundary=' + boundary})
-
-    result = urllib2.urlopen(req).read()
-    if result == '':
-        print '--- Error!!! ---'
-        return
-
-    print result
-    raw_input()
-
-    print '--- finished ---'
-
-
-def watch_command(stackfile, server):
-    """Наблюдаем за изменениями файлов из stackfile и заливаем их при изменении.
+def watch_command(stack, confs):
+    """Наблюдаем за изменениями файлов и заливаем их при изменении.
     Выход из этого режима - ctrl+c
 
-    stackfile --    Полное имя файла стека
-    server --       Элемент из массива servers
-    server_name --  Название сервера
+    TODO: настройки owner, group не поддерживаются
 
+    @param stack    Структура стека
+    @param confs    Dict конфигураций: {path: Conf}
     """
-    from os.path import join, getmtime
+    from os.path import getmtime
 
-    def upload(local_file, remote_file):
-        cmd_ssh = ('scp ' + local_file + ' ' +
-                   server['user'] + '@' + server['host'] + ':' + remote_file)
-        os.system(cmd_ssh)
+    def upload(conf, sub_path):
+        for server in conf.servers:
+            assert isinstance(server, Server)
+            cmd_ssh = ('scp ' + conf.local_path(sub_path) + ' ' +
+                       server.user_host + ':' + server.remote_path(sub_path))
+            os.system(cmd_ssh)
 
-    if server['protocol'] != 'ssh':
-        raise Exception("server protocol must be ssh")
-
-    if 'basedir' in server:
-        local_dir = server['basedir']
-    else:
-        raise Exception("server must have 'basedir'")
+    for conf in confs.itervalues():
+        assert isinstance(conf, Conf)
+        if conf.protocol != 'ssh':
+            raise Exception("server protocol must be ssh")
 
     files = []
-    for upload_file in open(stackfile):
-        upload_file = upload_file.rstrip()
-        local_file = join(local_dir, upload_file)
-        remote_file = server['rootdir'] + upload_file
-        files.append((local_file, remote_file, getmtime(local_file)))
-        upload(local_file, remote_file)
+    for conf_path, sub_paths in stack.data.iteritems():
+        conf = confs[conf_path]
+        assert isinstance(conf, Conf)
+        for sub_path in sub_paths:
+            files.append((conf, sub_path, getmtime(conf.local_path(sub_path))))
+            upload(conf, sub_path)
 
     print 'Watching for changes'
 
     while True:
         uploaded = False
-        for idx, (local_file, remote_file, mtime) in enumerate(files):
-            new_mtime = getmtime(local_file)
+        for idx, (conf, sub_path, mtime) in enumerate(files):
+            local_path = conf.local_path(sub_path)
+            new_mtime = getmtime(local_path)
             if new_mtime != mtime:
-                print local_file
+                print local_path
                 # Make commands
-                upload(local_file, remote_file)
+                upload(conf, sub_path)
 
-                files[idx] = (local_file, remote_file, new_mtime)
+                files[idx] = (conf, sub_path, new_mtime)
                 uploaded = True
 
         if not uploaded:
