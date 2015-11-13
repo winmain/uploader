@@ -3,10 +3,20 @@ Uploader
 
 Uploader is a tool for easy file uploads primarily via SSH.
 
+## Installation
+
+Uploader needs at least Python 2.6 to run and `python-setuptools` package for Debian to run `easy_install`.
+
+Run under `root`:
+
+```
+$ apt-get install python-setuptools
+$ easy_install uploader
+```
+
 ## How to use
 
-For example, you have an html project and a server.
-You want to deploy or update your project on the server.
+For example, you have an html project and a server accessible via SSH.
 
 Create a config `.upload.conf.py` named in the project workspace directory:
 
