@@ -5,6 +5,8 @@ conf = {
     'owner': 'root',
     'group': 'root',
 
+    'ssh_args': ['-p', '2222'],  # Custom ssh arguments (this example set custom port 2222)
+
     'ignore': ['.hg', '.git', '*.pyc', '.upload.conf.py'],  # Override ignore glob masks
     'ignore_add': ['*.ignore'],  # ... or add more ignore glob masks
 
