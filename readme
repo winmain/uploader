@@ -1,9 +1,0 @@
-Самое простое использование - запускать скрипт в консоли:
-gnome-terminal -e uploader
-
-Чтобы запустить нужно установить проект: setup-develop
-Далее, запускать так:
-
-uploader
-- или -
-python -m uploader.run

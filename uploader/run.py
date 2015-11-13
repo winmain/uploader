@@ -9,15 +9,15 @@ import uploader.clipboard
 def main():
     try:
         if len(sys.argv) < 2:
-            files = uploader.clipboard.check()      # Сначала проверим буфер обмена
+            files = uploader.clipboard.check()      # Check clipboard
         else:
-            files = sys.argv[1:]                    # Добавляем все файлы из командной строки
+            files = sys.argv[1:]                    # Add files from commandline
 
         if files:
             uploader.append_files(files)
         else:
-            if not uploader.receive_command():  # Потом проверим, не пуст ли список загрузок
-                raw_input()                     # Если он пуст, то тупо ничего не делаем :)
+            if not uploader.receive_command():  # Process command
+                raw_input()
 
     except KeyboardInterrupt:
         # User pressed CTRL+C, do nothing
@@ -29,7 +29,7 @@ def main():
         raw_input()
 
     except:
-        # Код ниже стопорит скрипт, если случилась ошибка. Чтобы можно было посмотреть что там такое.
+        # Code below stops the script on error to view a problem.
         import atexit
         atexit.register(raw_input)
         print "Unexpected error:", sys.exc_info()[0]

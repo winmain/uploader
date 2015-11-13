@@ -1,18 +1,4 @@
 # coding=utf-8
-"""
-ftp_upload.py
-Загружает файлы из home директории проекта по FTP на сервер. Загружает файл сначала в темповое имя, а потом переименовывает его - чтобы не он не обнулялся во время записи.
-Передавать имена файлов по argv, поддерживаются несколько файлов сразу. Можно передавать файлы пачками через буфер обмена - он их съест.
-Управление загрузкой происходит, если запустить скрипт без аргументов.
-Каталоги обрабатывать пока не умеет.
-
-Пример:
-ftp_upload.py Z:\home\rosrabota\www\404.htm Z:\home\rosrabota\www\off\ip.php
-    Грузит 2 файла себе в список.
-
-ftp_upload.py
-    Выдает список загруженных файлов и запрос на команду.
-"""
 import os
 import tempfile
 import time
@@ -23,24 +9,30 @@ stackPath = tempfile.gettempdir() + '/.uploader.stack'
 
 
 def split_conf_path(abspath):
-    """Разбиваем полный путь к файлу на сервер и относительный путь.
-    Если разбиение не получилось (сервер неизвестен), то возвращаем false
+    """Split absolute path to tuple (conf_path, sub_path), where
+    conf_path - path to config directory containing .upload.conf.py
+    sub_path - path relative to conf_path
+    Returns False on fail.
     """
-    # Попытаться найти .upload.conf.py файл
-    path = abspath
-    while path != '/':
-        path = os.path.dirname(path)
-        if os.path.exists(path + '/.upload.conf.py'):
-            return path, abspath[len(path) + 1:]
-    return False
+    # Try to file .upload.conf.py file
+    if os.path.isdir(abspath) and os.path.exists(abspath + '/.upload.conf.py'):
+        path = abspath[:-1] if abspath.endswith('/') else abspath
+        return path, '/'
+    else:
+        path = abspath
+        while path != '/':
+            path = os.path.dirname(path)
+            if os.path.exists(path + '/.upload.conf.py'):
+                return path, abspath[len(path) + 1:]
+        return False
 
 
 def append_file(stack, confs, abs_path):
-    """Просто добавляем файл в конец списка
+    """Simple add file to stack
 
-    @param stack                Структура стека с подготовленными для загрузки файлами
-    @param confs                Dict конфигураций, создаётся динамически. Нужен, чтобы получить ignore файлов.
-    @param abs_path             Абсолютный путь добавляемого файла или каталога
+    @param stack        Stack to add a file
+    @param confs        Dict of Conf as values and conf_path as keys. Filled dynamically
+    @param abs_path     Absolute path to file or directory to add
     """
     assert isinstance(stack, Stack)
     conf_and_path = split_conf_path(abs_path)
@@ -65,7 +57,7 @@ def append_file(stack, confs, abs_path):
     if conf.is_exec(basename) and not os.access(abs_path, os.X_OK):
         raise ConfError('Exec ' + abs_path + ' not executable')
 
-    # Если попалась директория - включить каждый файл в ней
+    # Recurse into directory
     if os.path.isdir(abs_path):
         for sub_path in os.listdir(abs_path):
             append_file(stack, confs, abs_path + '/' + sub_path)
@@ -75,9 +67,8 @@ def append_file(stack, confs, abs_path):
 
 
 def append_files(files):
-    """Добавить пачку файлов из массива files.
-
-    Это обертка для append_file()
+    """Add multiple files to uploader and save stack.
+    This is a wrapper for append_file()
     """
     assert isinstance(files, list)
     stack = Stack(stackPath)
@@ -92,7 +83,7 @@ def append_files(files):
 
 
 def receive_command():
-    """Ожидание и разбор команды от юзера."""
+    """Wait and process user command."""
 
     stack = Stack(stackPath)
     if not stack:
@@ -101,18 +92,18 @@ def receive_command():
     # Load configs
     confs = stack.load_confs()
 
-    # Выводим список файлов для загрузки
+    # Print files to upload
     stack.print_data(confs)
 
     command = raw_input("Enter: upload, 'c': clear list, 'w': watch for changes, ^C: stop > ")
 
     if command == 'c':
-        # Чистим этот список файлов
+        # Clear upload list
         stack.clear_and_save()
         return True
 
     if command == 'w':
-        # Мониторим файлы и заливаем их на сервер по мере изменения
+        # Monitor files & upload them on change
         watch_command(stack, confs)
         return True
 
@@ -122,7 +113,7 @@ def receive_command():
         try:
             fn()
         except:
-            # Код ниже стопорит скрипт, если случилась ошибка. Чтобы можно было посмотреть что там такое.
+            # Print exception stacktrace and mark upload as erroneous.
             was_error[0] = True
             import traceback
             traceback.print_exc()
@@ -158,10 +149,10 @@ def receive_command():
 
 
 def upload_ssh(conf, server, stack_items):
-    """Поехали аплоадить файлы на сервак по SSH
+    """Do upload files to server via SSH
 
-    @param conf             Конфигурация аплоада
-    @param server           Сервер аплоада
+    @param conf             Conf - upload config
+    @param server           Server to upload
     @param stack_items      List of StackItem for upload
     """
     import io
@@ -220,12 +211,13 @@ def upload_ssh(conf, server, stack_items):
     print '--- finished ' + server.user_host + ' ---'
 
 
-def upload_ftp(conf, server, sub_paths):
-    """Поехали аплоадить файлы на сервак по FTP
+def upload_ftp(conf, server, stack_items):
+    """Do upload files to server via FTP
+    WARNING: not supported. May not work properly.
 
-    @param conf         Конфигурация аплоада
-    @param server       Сервер аплоада
-    @param sub_paths    Список файлов для аплоада относительно пути conf.path
+    @param conf             Conf - upload config
+    @param server           Server to upload
+    @param stack_items      List of StackItem for upload
     """
     assert isinstance(conf, Conf)
     assert isinstance(server, Server)
@@ -235,10 +227,12 @@ def upload_ftp(conf, server, sub_paths):
     ftp.cwd(server.rootdir)
 
     print 'Uploading'
-    for sub_path in sub_paths:
+    for item in stack_items:
+        assert isinstance(item, StackItem)
+        sub_path = server.remote_path(item.pure_path)
         sub_path_tmp = sub_path + '~'
         print sub_path,
-        ftp.storbinary('STOR ' + sub_path_tmp, open(conf.local_path(sub_path), 'rb'))
+        ftp.storbinary('STOR ' + sub_path_tmp, open(conf.local_path(item.sub_path), 'rb'))
         ftp.rename(sub_path_tmp, sub_path)
         print '... OK'
 
@@ -247,13 +241,13 @@ def upload_ftp(conf, server, sub_paths):
 
 
 def watch_command(stack, confs):
-    """Наблюдаем за изменениями файлов и заливаем их при изменении.
-    Выход из этого режима - ctrl+c
+    """Watch on file(s) change and upload them on change.
+    Use Ctrl+c to exit from this mode.
 
-    TODO: настройки owner, group не поддерживаются
+    TODO: conf.owner, conf.group not supported.
 
-    @param stack    Структура стека
-    @param confs    Dict конфигураций: {path: Conf}
+    @param stack    Stack with files
+    @param confs    Dict of Conf as values and conf_path as keys
     """
     from os.path import getmtime
 

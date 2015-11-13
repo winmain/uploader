@@ -3,40 +3,40 @@ import os
 from os.path import exists
 
 def check_win_clipboard():
-    """Windows: Проверим-ка мы буфер обмена. Можно копировать файлы и заносить их в список.
+    """Windows clipboard
     """
     import win32clipboard as w #@UnresolvedImport
     import win32con #@UnresolvedImport
 
-    # Смотрим, что у нас в буфере
+    # Check the clipboard
     w.OpenClipboard()
     try:
         files = w.GetClipboardData(win32con.CF_HDROP)
     except:
         w.CloseClipboard()
         return False
-    # Очищаем и закрываем буфер
+    # Clean & close clipboard
     w.EmptyClipboard()
     w.CloseClipboard()
 
-    # Добавляем наши файлы
+    # Add out files
     return files
 
 
 def check_gtk_clipboard():
-    """Linux, gnome: Проверим-ка мы буфер обмена. Можно копировать файлы и заносить их в список.
+    """Linux, gnome cliboard
     """
     import pygtk #@UnresolvedImport
     pygtk.require('2.0')
     import gtk #@UnresolvedImport
 
-    # get the clipboard
+    # Get the clipboard
     clipboard = gtk.clipboard_get()
 
-    # Смотрим, что у нас в буфере
+    # Check the clipboard
     contents = clipboard.wait_for_contents('text/uri-list')
     if contents is None:
-        # Попробовать разобрать текст
+        # Try to parse text
         cliptext = clipboard.wait_for_text()
         if cliptext:
             uris = cliptext.split('\n')
@@ -45,7 +45,7 @@ def check_gtk_clipboard():
     else:
         uris = contents.get_uris()
 
-    # Добавляем наши файлы
+    # Add our files
     files = []
     for file in uris:
         if file:
@@ -55,7 +55,7 @@ def check_gtk_clipboard():
             if exists(file):
                 files.append(file)
 
-    # Очищаем буфер
+    # Clear clipboard
     if files:
         clipboard.set_text('')
         clipboard.store()

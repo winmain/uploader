@@ -1,0 +1,6 @@
+<html>
+<body>
+You may write multiple server names delimited by comma.
+In this case both servers: 'one' and 'two' will receive this file.
+</body>
+</html>

@@ -23,7 +23,7 @@ class Conf:
             raise ConfError('Unknown upload protocol "%s"' % self.protocol)
 
         # Glob filters to ignore files
-        self.ignore = conf.get('ignore', ['.hg', '.git', '*.pyc']) + conf.get('ignore_add', [])
+        self.ignore = conf.get('ignore', ['.hg', '.git', '*.pyc', '.upload.conf.py']) + conf.get('ignore_add', [])
         assert isinstance(self.ignore, list)
 
         # Exec filters to execute on server side & delete after it
