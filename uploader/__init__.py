@@ -257,12 +257,13 @@ def watch_command(stack, confs):
     """
     from os.path import getmtime
 
-    def upload(conf, sub_path, server_filter, opts):
+    def upload(conf, item):
+        assert isinstance(item, StackItem)
         for server in conf.servers:
             assert isinstance(server, Server)
-            if server in server_filter:
-                cmd_ssh = ('scp ' + conf.local_path(sub_path) + ' ' +
-                           server.user_host + ':' + server.remote_path(sub_path))
+            if server in item.server_filter:
+                cmd_ssh = ('scp ' + conf.local_path(item.sub_path) + ' ' +
+                           server.user_host + ':' + server.remote_path(item.pure_path))
                 os.system(cmd_ssh)
 
     for conf in confs.itervalues():
@@ -271,26 +272,28 @@ def watch_command(stack, confs):
             raise Exception("server protocol must be ssh")
 
     files = []
-    for conf_path, sub_path_rows in stack.data.iteritems():
+    for conf_path, stack_items in stack.data.iteritems():
         conf = confs[conf_path]
         assert isinstance(conf, Conf)
-        for sub_path, server_filter, opts in sub_path_rows:
-            files.append((conf, sub_path, server_filter, opts, getmtime(conf.local_path(sub_path))))
-            upload(conf, sub_path, server_filter, opts)
+        for item in stack_items:
+            assert isinstance(item, StackItem)
+            files.append((conf, item, getmtime(conf.local_path(item.sub_path))))
+            upload(conf, item)
 
     print 'Watching for changes'
 
     while True:
         uploaded = False
-        for idx, (conf, sub_path, server_filter, opts, mtime) in enumerate(files):
-            local_path = conf.local_path(sub_path)
+        for idx, (conf, item, mtime) in enumerate(files):
+            assert isinstance(item, StackItem)
+            local_path = conf.local_path(item.sub_path)
             new_mtime = getmtime(local_path)
             if new_mtime != mtime:
                 print local_path
                 # Make commands
-                upload(conf, sub_path, server_filter, opts)
+                upload(conf, item)
 
-                files[idx] = (conf, sub_path, new_mtime)
+                files[idx] = (conf, item, new_mtime)
                 uploaded = True
 
         if not uploaded:
