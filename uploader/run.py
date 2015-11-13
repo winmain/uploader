@@ -2,6 +2,7 @@
 # coding: utf-8
 import sys
 
+from uploader import ConfError
 import uploader.clipboard
 
 
@@ -21,6 +22,11 @@ def main():
     except KeyboardInterrupt:
         # User pressed CTRL+C, do nothing
         pass
+
+    except ConfError as e:
+        print
+        print "Error:", e.message
+        raw_input()
 
     except:
         # Код ниже стопорит скрипт, если случилась ошибка. Чтобы можно было посмотреть что там такое.
