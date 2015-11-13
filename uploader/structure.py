@@ -22,9 +22,13 @@ class Conf:
         if self.protocol not in ['ssh', 'ftp']:
             raise ConfError('Unknown upload protocol "%s"' % self.protocol)
 
-        # List glob filters to ignore files
-        self.ignore = conf.get('ignore', ['.hg', '.git', '*.pyc'])
+        # Glob filters to ignore files
+        self.ignore = conf.get('ignore', ['.hg', '.git', '*.pyc']) + conf.get('ignore_add', [])
         assert isinstance(self.ignore, list)
+
+        # Exec filters to execute on server side & delete after it
+        self.execs = conf.get('execs', ['.upload.exec*']) + conf.get('execs_add', [])
+        assert isinstance(self.execs, list)
 
         if 'servers' in conf and len(conf['servers']) > 0:
             self.servers = []
@@ -44,6 +48,12 @@ class Conf:
 
     def is_ignore(self, filename):
         for pattern in self.ignore:
+            if fnmatch(filename, pattern):
+                return True
+        return False
+
+    def is_exec(self, filename):
+        for pattern in self.execs:
             if fnmatch(filename, pattern):
                 return True
         return False
@@ -80,8 +90,8 @@ class Server:
         if self.ssh_args is not None and not isinstance(self.ssh_args, list):
             raise ConfError('"ssh_args" must be list')
 
-    def remote_path(self, sub_path):
-        return os.path.normpath(self.rootdir + '/' + sub_path)
+    def remote_path(self, pure_path):
+        return os.path.normpath('/' + pure_path if self.rootdir == '/' else self.rootdir + '/' + pure_path)
 
 
 class ServerFilter:
@@ -171,13 +181,16 @@ class Stack:
 
     __nonzero__ = __bool__
 
-    def print_data(self):
+    def print_data(self, confs):
         paths = sorted(self.data.keys())
         for path in paths:
+            conf = confs[path]
+            assert isinstance(conf, Conf)
             print(path + ':')
             for item in sorted(self.data[path], key=lambda v: v.sub_path):
                 assert isinstance(item, StackItem)
-                print('  ' + item.pure_path +
+                print(('[exec] ' if conf.is_exec(os.path.basename(item.pure_path)) else '  ') +
+                      item.pure_path +
                       ('  srv:' + str(item.server_filter.to_value()) if item.server_filter != ServerFilter.all else '') +
                       ('  opts:' + str(item.opts) if item.opts else ''))
             print('')

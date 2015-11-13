@@ -43,9 +43,6 @@ def append_file(stack, confs, abs_path):
     @param abs_path             Абсолютный путь добавляемого файла или каталога
     """
     assert isinstance(stack, Stack)
-    if not os.path.exists(abs_path):
-        raise ConfError('File ' + abs_path + ' does not exist')
-
     conf_and_path = split_conf_path(abs_path)
     if not conf_and_path:
         raise ConfError('Config file .upload.conf.py not found in this directory or parent tree')
@@ -57,9 +54,16 @@ def append_file(stack, confs, abs_path):
     assert isinstance(conf, Conf)
 
     stack_item = StackItem.from_sub_path(sub_path)
-    if conf.is_ignore(os.path.basename(stack_item.pure_path)):
-        return True
+    basename = os.path.basename(stack_item.pure_path)
+    if conf.is_ignore(basename):
+        return False
     stack_item.server_filter.validate(conf)
+
+    if not os.path.exists(abs_path) and not os.path.islink(abs_path):  # We allow to add broken symlinks
+        raise ConfError('File ' + abs_path + ' does not exist')
+
+    if conf.is_exec(basename) and not os.access(abs_path, os.X_OK):
+        raise ConfError('Exec ' + abs_path + ' not executable')
 
     # Если попалась директория - включить каждый файл в ней
     if os.path.isdir(abs_path):
@@ -67,6 +71,7 @@ def append_file(stack, confs, abs_path):
             append_file(stack, confs, abs_path + '/' + sub_path)
     else:
         stack.append(conf_path, stack_item)
+    return True
 
 
 def append_files(files):
@@ -79,8 +84,10 @@ def append_files(files):
     confs = {}
     for filename in files:
         print filename + ': ',
-        append_file(stack, confs, os.path.abspath(filename))
-        print('OK')
+        if append_file(stack, confs, os.path.abspath(filename)):
+            print('OK')
+        else:
+            print('ignored')
     stack.save()
 
 
@@ -91,8 +98,11 @@ def receive_command():
     if not stack:
         print('Download stack is empty')
         return False
+    # Load configs
+    confs = stack.load_confs()
+
     # Выводим список файлов для загрузки
-    stack.print_data()
+    stack.print_data(confs)
 
     command = raw_input("Enter: upload, 'c': clear list, 'w': watch for changes, ^C: stop > ")
 
@@ -100,9 +110,6 @@ def receive_command():
         # Чистим этот список файлов
         stack.clear_and_save()
         return True
-
-    # Load configs
-    confs = stack.load_confs()
 
     if command == 'w':
         # Мониторим файлы и заливаем их на сервер по мере изменения
@@ -162,12 +169,27 @@ def upload_ssh(conf, server, stack_items):
     import subprocess
     assert isinstance(conf, Conf)
     assert isinstance(server, Server)
-    print('Uploading as ' + server.user_host)
 
     ssh_args = ['/usr/bin/ssh']
     if server.ssh_args:
         ssh_args += server.ssh_args
     ssh_args += [server.user_host, 'tar', '-C', server.rootdir, '-xzf', '-']
+
+    # Check for execs and add them to ssh_args
+    execs = []
+    for stack_item in stack_items:
+        if conf.is_exec(os.path.basename(stack_item.pure_path)):
+            path = server.remote_path(stack_item.pure_path)
+            execs += [';', path, ';', 'rm ' + path]
+    if execs:
+        execs[0] = '&&'
+        ssh_args += execs
+
+    if execs:
+        print 'Uploading as ' + server.user_host + ' and executing ' + ' '.join(execs)
+    else:
+        print 'Uploading as ' + server.user_host
+
     ssh_process = subprocess.Popen(ssh_args, stdin=subprocess.PIPE)
 
     with tarfile.open(mode="w|gz",
@@ -191,7 +213,9 @@ def upload_ssh(conf, server, stack_items):
             tar.addfile(tarinfo, io.FileIO(abspath))
         tar.close()
     ssh_process.stdin.close()
-    ssh_process.wait()
+    ret_code = ssh_process.wait()
+    if ret_code != 0:
+        raw_input()
 
     print '--- finished ' + server.user_host + ' ---'
 
