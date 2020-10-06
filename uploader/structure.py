@@ -34,7 +34,7 @@ class Conf:
             self.servers = []
             for confSrv in conf['servers']:
                 srv = conf.copy()
-                for key, value in confSrv.iteritems():
+                for key, value in confSrv.items():
                     if value is None:
                         del srv[key]
                     else:
@@ -97,7 +97,7 @@ class Server:
 class ServerFilter:
     def __init__(self, filter):
         if isinstance(filter, list):
-            filter = set(unicode(v) for v in filter)
+            filter = set(str(v) for v in filter)
         self.filter = filter
 
     def __and__(self, other):
@@ -115,7 +115,7 @@ class ServerFilter:
         elif self.filter is None:
             return False
         else:
-            return unicode(item.name) in self.filter
+            return str(item.name) in self.filter
 
     def to_value(self):
         if isinstance(self.filter, set):
@@ -149,13 +149,13 @@ class Stack:
             f = open(self.file_name, 'r')
             data = json.load(f)
             self.data = {conf_path: set([StackItem.from_value(value) for value in path_rows])
-                         for conf_path, path_rows in data.iteritems()}
+                         for conf_path, path_rows in data.items()}
             f.close()
 
     def save(self):
         to_save = {conf_path: [stack_item.to_value()
                                for stack_item in sorted(list(path_rows_set), key=lambda si: si.sub_path)]
-                   for conf_path, path_rows_set in self.data.iteritems()}
+                   for conf_path, path_rows_set in self.data.items()}
         f = open(self.file_name, 'w')
         json.dump(to_save, f, indent=2)
         f.close()
@@ -186,28 +186,28 @@ class Stack:
         for path in paths:
             conf = confs[path]
             assert isinstance(conf, Conf)
-            print(path + ':')
+            print((path + ':'))
             for item in sorted(self.data[path], key=lambda v: v.sub_path):
                 assert isinstance(item, StackItem)
-                print(('[exec] ' if conf.is_exec(os.path.basename(item.pure_path)) else '  ') +
+                print((('[exec] ' if conf.is_exec(os.path.basename(item.pure_path)) else '  ') +
                       item.pure_path +
                       ('  srv:' + str(item.server_filter.to_value()) if item.server_filter != ServerFilter.all else '') +
-                      ('  opts:' + str(item.opts) if item.opts else ''))
+                      ('  opts:' + str(item.opts) if item.opts else '')))
             print('')
 
         if len(paths) > 1:
             for path in paths:
                 count = len(self.data[path])
-                print('* %s: %d %s' % (path, count, 'file' if count == 1 else 'files'))
+                print(('* %s: %d %s' % (path, count, 'file' if count == 1 else 'files')))
             print('')
 
     def load_confs(self):
-        return {path: Conf(path) for path in self.data.iterkeys()}
+        return {path: Conf(path) for path in self.data.keys()}
 
 
 class StackItem:
-    re_filename_ending = re.compile(u'[^@#][@#][^@#][^/]*')
-    re_filename_part = re.compile(u'[@#][^@#]+')
+    re_filename_ending = re.compile('[^@#][@#][^@#][^/]*')
+    re_filename_part = re.compile('[@#][^@#]+')
 
     def __init__(self, sub_path, pure_path, server_filter, opts):
         self.sub_path = sub_path
@@ -222,7 +222,7 @@ class StackItem:
         server_filter = ServerFilter.all
         opts = []  # list of options
         idx = 0
-        pure_path = u''
+        pure_path = ''
         while True:
             m = cls.re_filename_ending.search(sub_path, idx)
             if not m:

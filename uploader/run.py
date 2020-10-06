@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # coding: utf-8
 import sys
 
@@ -17,22 +17,22 @@ def main():
             uploader.append_files(files)
         else:
             if not uploader.receive_command():  # Process command
-                raw_input()
+                input()
 
     except KeyboardInterrupt:
         # User pressed CTRL+C, do nothing
         pass
 
     except ConfError as e:
-        print
-        print "Error:", e.message
-        raw_input()
+        print()
+        print("Error:", str(e))
+        input()
 
     except:
         # Code below stops the script on error to view a problem.
         import atexit
-        atexit.register(raw_input)
-        print "Unexpected error:", sys.exc_info()[0]
+        atexit.register(input)
+        print("Unexpected error:", sys.exc_info()[0])
         raise
 
 

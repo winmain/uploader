@@ -1,0 +1,7 @@
+*.pyc
+/build
+/dist
+/venv
+/uploader.egg-info
+tt.py
+/.idea

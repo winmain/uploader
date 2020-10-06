@@ -5,7 +5,7 @@ Uploader is a tool for easy file uploads primarily via SSH.
 
 ## Installation
 
-Uploader needs at least Python 2.6 to run and `python-setuptools` package for Debian to run `easy_install`.
+Uploader needs Python 3 to run and `python-setuptools` package for Debian to run `easy_install`.
 
 Run under `root`:
 

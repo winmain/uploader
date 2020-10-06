@@ -1,1 +1,1 @@
-python ./setup.py clean build sdist upload
+python3 ./setup.py clean build sdist upload

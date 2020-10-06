@@ -3,7 +3,7 @@ import os
 import tempfile
 import time
 
-from structure import *
+from .structure import *
 
 stackPath = tempfile.gettempdir() + '/.uploader.stack'
 
@@ -74,7 +74,7 @@ def append_files(files):
     stack = Stack(stackPath)
     confs = {}
     for filename in files:
-        print filename + ': ',
+        print(filename + ': ', end=' ')
         if append_file(stack, confs, os.path.abspath(filename)):
             print('OK')
         else:
@@ -95,7 +95,7 @@ def receive_command():
     # Print files to upload
     stack.print_data(confs)
 
-    command = raw_input("Enter: upload, 'c': clear list, 'w': watch for changes, ^C: stop > ")
+    command = input("Enter: upload, 'c': clear list, 'w': watch for changes, ^C: stop > ")
 
     if command == 'c':
         # Clear upload list
@@ -120,12 +120,12 @@ def receive_command():
 
     import threading
     threads = []
-    for conf_path, stack_items in stack.data.iteritems():
+    for conf_path, stack_items in stack.data.items():
         conf = confs[conf_path]
         assert isinstance(conf, Conf)
         for server in conf.servers:
             assert isinstance(server, Server)
-            items = filter(lambda v: server in v.server_filter, stack_items)
+            items = [v for v in stack_items if server in v.server_filter]
 
             if items:
                 if conf.protocol == 'ssh':
@@ -177,9 +177,9 @@ def upload_ssh(conf, server, stack_items):
         ssh_args += execs
 
     if execs:
-        print 'Uploading as ' + server.user_host + ' and executing ' + ' '.join(execs)
+        print('Uploading as ' + server.user_host + ' and executing ' + ' '.join(execs))
     else:
-        print 'Uploading as ' + server.user_host
+        print('Uploading as ' + server.user_host)
 
     ssh_process = subprocess.Popen(ssh_args, stdin=subprocess.PIPE)
 
@@ -206,9 +206,9 @@ def upload_ssh(conf, server, stack_items):
     ssh_process.stdin.close()
     ret_code = ssh_process.wait()
     if ret_code != 0:
-        raw_input()
+        input()
 
-    print '--- finished ' + server.user_host + ' ---'
+    print('--- finished ' + server.user_host + ' ---')
 
 
 def upload_ftp(conf, server, stack_items):
@@ -226,18 +226,18 @@ def upload_ftp(conf, server, stack_items):
     ftp = FTP(server.host, server.user, server.srv['passwd'])
     ftp.cwd(server.rootdir)
 
-    print 'Uploading'
+    print('Uploading')
     for item in stack_items:
         assert isinstance(item, StackItem)
         sub_path = server.remote_path(item.pure_path)
         sub_path_tmp = sub_path + '~'
-        print sub_path,
+        print(sub_path, end=' ')
         ftp.storbinary('STOR ' + sub_path_tmp, open(conf.local_path(item.sub_path), 'rb'))
         ftp.rename(sub_path_tmp, sub_path)
-        print '... OK'
+        print('... OK')
 
     ftp.quit()
-    print '--- finished ---'
+    print('--- finished ---')
 
 
 def watch_command(stack, confs):
@@ -260,13 +260,13 @@ def watch_command(stack, confs):
                            server.user_host + ':' + server.remote_path(item.pure_path))
                 os.system(cmd_ssh)
 
-    for conf in confs.itervalues():
+    for conf in confs.values():
         assert isinstance(conf, Conf)
         if conf.protocol != 'ssh':
             raise Exception("server protocol must be ssh")
 
     files = []
-    for conf_path, stack_items in stack.data.iteritems():
+    for conf_path, stack_items in stack.data.items():
         conf = confs[conf_path]
         assert isinstance(conf, Conf)
         for item in stack_items:
@@ -274,7 +274,7 @@ def watch_command(stack, confs):
             files.append((conf, item, getmtime(conf.local_path(item.sub_path))))
             upload(conf, item)
 
-    print 'Watching for changes'
+    print('Watching for changes')
 
     while True:
         uploaded = False
@@ -283,7 +283,7 @@ def watch_command(stack, confs):
             local_path = conf.local_path(item.sub_path)
             new_mtime = getmtime(local_path)
             if new_mtime != mtime:
-                print local_path
+                print(local_path)
                 # Make commands
                 upload(conf, item)
 

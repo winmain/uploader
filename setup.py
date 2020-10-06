@@ -1,13 +1,13 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # coding: utf-8
 from setuptools import setup
 
 setup(name='uploader',
-      version='0.4.1',
-      description='Uploading administration tool',
+      version='0.5.0',
+      description='SSH upload administration tool',
       author='Denis Denisenko',
       author_email='d.winmain@gmail.com',
-      url='https://bitbucket.org/winmain/uploader/',
+      url='https://github.com/winmain/uploader',
       packages=['uploader'],
       keywords='upload ssh',
       classifiers=['Environment :: Console',
