@@ -14,6 +14,8 @@ def main():
             files = sys.argv[1:]                    # Add files from commandline
 
         if files:
+            if type(files) is tuple:
+                files = list(files)
             uploader.append_files(files)
         else:
             if not uploader.receive_command():  # Process command

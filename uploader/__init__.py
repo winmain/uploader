@@ -109,6 +109,7 @@ def receive_command():
 
     # Upload files to server/servers in parallel threads
     was_error = [False]
+
     def safe_run(fn):
         try:
             fn()
@@ -158,10 +159,15 @@ def upload_ssh(conf, server, stack_items):
     import io
     import tarfile
     import subprocess
+    import sys
     assert isinstance(conf, Conf)
     assert isinstance(server, Server)
 
-    ssh_args = ['/usr/bin/ssh']
+    if sys.platform == 'win32':
+        ssh_args = ['ssh']
+    else:
+        ssh_args = ['/usr/bin/ssh']
+
     if server.ssh_args:
         ssh_args += server.ssh_args
     ssh_args += [server.user_host, 'tar', '-C', server.rootdir, '-xzf', '-']
@@ -171,7 +177,7 @@ def upload_ssh(conf, server, stack_items):
     for stack_item in stack_items:
         if conf.is_exec(os.path.basename(stack_item.pure_path)):
             path = server.remote_path(stack_item.pure_path)
-            execs += [';', path, ';', 'rm ' + path]
+            execs += [';', 'chmod +x ' + path, ' && ', path, ';', 'rm ' + path]
     if execs:
         execs[0] = '&&'
         ssh_args += execs

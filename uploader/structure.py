@@ -90,8 +90,13 @@ class Server:
         if self.ssh_args is not None and not isinstance(self.ssh_args, list):
             raise ConfError('"ssh_args" must be list')
 
+    @staticmethod
+    def fix_path_slashes(path):
+        return path.replace(os.sep, '/')
+
     def remote_path(self, pure_path):
-        return os.path.normpath('/' + pure_path if self.rootdir == '/' else self.rootdir + '/' + pure_path)
+        path = os.path.normpath('/' + pure_path if self.rootdir == '/' else self.rootdir + '/' + pure_path)
+        return self.fix_path_slashes(path)
 
 
 class ServerFilter:

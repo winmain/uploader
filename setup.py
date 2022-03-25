@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='uploader',
-      version='0.5.0',
+      version='0.5.1',
       description='SSH upload administration tool',
       author='Denis Denisenko',
       author_email='d.winmain@gmail.com',
